@@ -76,9 +76,9 @@ def main(dataset, dataroot, download, augment, batch_size, eval_batch_size,
          flow_permutation, flow_coupling, LU_decomposed, learn_top,
          y_condition, y_weight, max_grad_clip, max_grad_norm, lr,
          n_workers, cuda, n_init_batches, warmup_steps, output_dir,
-         saved_optimizer, warmup, fresh):
+         saved_optimizer, warmup, fresh, gpuid):
 
-    device = 'cpu' if (not torch.cuda.is_available() or not cuda) else 'cuda:0'
+    device = 'cpu' if (not torch.cuda.is_available() or not cuda) else 'cuda:'+str(gpuid)
 
     check_manual_seed(seed)
 
@@ -208,7 +208,7 @@ def main(dataset, dataroot, download, augment, batch_size, eval_batch_size,
             assert init_batches.shape[0] == n_init_batches * batch_size
 
             if y_condition:
-                init_targets = torch.cat(init_targets).to(device)
+                init_targets = torch.cat(init_targets).to(device)   #.float()
             else:
                 init_targets = None
 
@@ -356,6 +356,10 @@ if __name__ == '__main__':
     parser.add_argument('--seed',
                         type=int, default=0,
                         help='manual seed')
+    
+    parser.add_argument('--gpuid',
+                        type=int, default=0,
+                        help='which GPU card to use')    
 
     args = parser.parse_args()
     kwargs = vars(args)

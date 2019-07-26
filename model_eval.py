@@ -235,6 +235,7 @@ class Glow(nn.Module):
 
         mean, logs = self.prior(x, y_onehot)
         objective += gaussian_likelihood(mean, logs, z)
+        logpz = gaussian_likelihood(mean, logs, z)
 
         if self.y_condition:
             y_logits = self.project_class(z.mean(2).mean(2))
@@ -244,7 +245,7 @@ class Glow(nn.Module):
         # Full objective - converted to bits per dimension
         bpd = (-objective) / (math.log(2.) * c * h * w)
 
-        return z, bpd, y_logits
+        return z, bpd, y_logits, logpz
 
     def reverse_flow(self, z, y_onehot, temperature):
         with torch.no_grad():

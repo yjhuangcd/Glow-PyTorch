@@ -7,7 +7,7 @@ from torchvision import transforms, datasets
 
 n_bits = 8
 
-
+# match the preprocess in NRM, scale the images to [-1,1]
 def preprocess(x):
     # Follows:
     # https://github.com/tensorflow/tensor2tensor/blob/e48cf23c505565fd63378286d9722a1632f4bef7/tensor2tensor/models/research/glow.py#L78
@@ -17,15 +17,15 @@ def preprocess(x):
     n_bins = 2**n_bits
     if n_bits < 8:
       x = torch.floor(x / 2 ** (8 - n_bits))
-    x = x / n_bins - 0.5
+    x = (x / n_bins - 0.5) * 2
 
     return x
 
 
 def postprocess(x):
-    x = torch.clamp(x, -0.5, 0.5)
-    x += 0.5
-    x = x * 2**n_bits
+    x = torch.clamp(x, -1.0, 1.0)
+    x += 1.0
+    x = x * 2**n_bits / 2
     return torch.clamp(x, 0, 255).byte()
 
 
@@ -73,7 +73,7 @@ def get_SVHN(augment, dataroot, download):
     transformations.extend([transforms.ToTensor(), preprocess])
     transform = transforms.Compose(transformations)
 
-    one_hot_encode = get_one_hot_encode(num_classes)
+    one_hot_encode = lambda target: F.one_hot(torch.tensor(target), num_classes)
 
     path = Path(dataroot) / 'data' / 'SVHN'
     train_dataset = datasets.SVHN(path, split='train',
