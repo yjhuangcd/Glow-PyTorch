@@ -152,6 +152,24 @@ class ActNorm2d(_ActNorm):
                 self.num_features, input.size()))
 
 
+class LinearZeros_DROP(nn.Module):
+    def __init__(self, in_channels, out_channels, logscale_factor=3):
+        super().__init__()
+        
+        self.dropout = nn.Dropout(0.5)
+        self.linear = nn.Linear(in_channels, out_channels)
+        self.linear.weight.data.zero_()
+        self.linear.bias.data.zero_()
+
+        self.logscale_factor = logscale_factor
+
+        self.logs = nn.Parameter(torch.zeros(out_channels))
+
+    def forward(self, input):
+        output_drop = self.dropout(input)
+        output = self.linear(output_drop)
+        return output * torch.exp(self.logs * self.logscale_factor)
+    
 class LinearZeros(nn.Module):
     def __init__(self, in_channels, out_channels, logscale_factor=3):
         super().__init__()
@@ -160,16 +178,13 @@ class LinearZeros(nn.Module):
         self.linear.weight.data.zero_()
         self.linear.bias.data.zero_()
         
-        self.dropout = nn.Dropout(0.5)
-
         self.logscale_factor = logscale_factor
 
         self.logs = nn.Parameter(torch.zeros(out_channels))
 
     def forward(self, input):
         output = self.linear(input)
-        output_drop = self.dropout(output)
-        return output_drop * torch.exp(self.logs * self.logscale_factor)
+        return output * torch.exp(self.logs * self.logscale_factor)
 
 
 class Conv2d(nn.Module):
