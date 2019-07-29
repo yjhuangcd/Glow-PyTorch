@@ -160,16 +160,13 @@ class LinearZeros(nn.Module):
         self.linear.weight.data.zero_()
         self.linear.bias.data.zero_()
         
-        self.dropout = nn.Dropout(0.5)
-
         self.logscale_factor = logscale_factor
 
         self.logs = nn.Parameter(torch.zeros(out_channels))
 
     def forward(self, input):
         output = self.linear(input)
-        output_drop = self.dropout(output)
-        return output_drop * torch.exp(self.logs * self.logscale_factor)
+        return output * torch.exp(self.logs * self.logscale_factor)
 
 
 class Conv2d(nn.Module):

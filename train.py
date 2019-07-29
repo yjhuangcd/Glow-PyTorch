@@ -18,6 +18,12 @@ from ignite.metrics import RunningAverage, Loss
 from datasets import get_CIFAR10, get_SVHN
 from model import Glow
 
+import logging
+from tensorboardX import SummaryWriter
+
+import datetime
+import time
+
 
 def check_manual_seed(seed):
     seed = seed or random.randint(1, 10000)
@@ -104,6 +110,21 @@ def main(dataset, dataroot, download, augment, batch_size, eval_batch_size,
 
     lr_lambda = lambda epoch: lr * min(1., epoch / warmup)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    
+    # set logging option
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    logger.addHandler(console)
+
+    hdlr = logging.FileHandler(output_dir + 'losses.log')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr)
+    
+    writer = SummaryWriter(output_dir + 'losses')
 
     def step(engine, batch):
         model.train()
@@ -119,7 +140,7 @@ def main(dataset, dataroot, download, augment, batch_size, eval_batch_size,
         else:
             z, nll, y_logits = model(x, None)
             losses = compute_loss(nll)
-
+            
         losses['total_loss'].backward()
 
         if max_grad_clip > 0:
@@ -170,6 +191,13 @@ def main(dataset, dataroot, download, augment, batch_size, eval_batch_size,
 
         # Note: replace by https://github.com/pytorch/ignite/pull/524 when released
         Loss(lambda x, y: torch.mean(x), output_transform=lambda x: (x['nll'], torch.empty(x['nll'].shape[0]))).attach(evaluator, 'nll')
+        monitoring_metrics.extend(['loss_classes'])
+        RunningAverage(output_transform=lambda x: x['loss_classes']).attach(trainer, 'loss_classes')
+
+        # Note: replace by https://github.com/pytorch/ignite/pull/524 when released
+        Loss(lambda x, y: torch.mean(x), output_transform=lambda x: (x['loss_classes'], torch.empty(x['loss_classes'].shape[0]))).attach(evaluator, 'loss_classes')
+
+
 
     pbar = ProgressBar()
     pbar.attach(trainer, metric_names=monitoring_metrics)
@@ -208,7 +236,7 @@ def main(dataset, dataroot, download, augment, batch_size, eval_batch_size,
             assert init_batches.shape[0] == n_init_batches * batch_size
 
             if y_condition:
-                init_targets = torch.cat(init_targets).to(device)   #.float()
+                init_targets = torch.cat(init_targets).to(device)
             else:
                 init_targets = None
 
@@ -216,12 +244,31 @@ def main(dataset, dataroot, download, augment, batch_size, eval_batch_size,
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def evaluate(engine):
+
+        evaluator.run(train_loader)
+
+        metrics = evaluator.state.metrics
+        
+        writer.add_scalars('loss_classes', {'train': metrics['loss_classes']}, engine.state.epoch)
+        writer.add_scalars('loss_nll', {'train': metrics['nll']}, engine.state.epoch)
+        writer.add_scalars('loss_total', {'train': metrics['total_loss']}, engine.state.epoch)
+        epoch_str = ("Epoch %d. Train_Loss_Classes: %f, Train_NLL: %f, Train_Total: %f " % (engine.state.epoch, metrics['loss_classes'], metrics['nll'], metrics['total_loss']))       
+
+        logging.info(epoch_str)
+        
         evaluator.run(test_loader)
 
         scheduler.step()
         metrics = evaluator.state.metrics
 
         losses = ', '.join([f"{key}: {value:.2f}" for key, value in metrics.items()])
+        
+        writer.add_scalars('loss_classes', {'eval': metrics['loss_classes']}, engine.state.epoch)
+        writer.add_scalars('loss_nll', {'eval': metrics['nll']}, engine.state.epoch)
+        writer.add_scalars('loss_total', {'eval': metrics['total_loss']}, engine.state.epoch)    
+        epoch_str = ("Epoch %d. Eval_Loss_Classes: %f, Eval_NLL: %f, Eval_Total: %f " % (engine.state.epoch, metrics['loss_classes'], metrics['nll'], metrics['total_loss']))       
+
+        logging.info(epoch_str)
 
         print(f'Validation Results - Epoch: {engine.state.epoch} {losses}')
 
