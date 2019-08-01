@@ -186,7 +186,8 @@ class Glow(nn.Module):
         # learned prior
         if learn_top:
             C = self.flow.output_shapes[-1][1]
-            self.learn_top_fn = Conv2dZeros(C * 2, C * 2)
+#             self.learn_top_fn = Conv2dZeros(C * 2, C * 2)
+            self.learn_top_fn = Conv2d(C * 2, C * 2)
 
         if y_condition:
             C = self.flow.output_shapes[-1][1]
