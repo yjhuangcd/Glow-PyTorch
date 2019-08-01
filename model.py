@@ -209,6 +209,8 @@ class Glow(nn.Module):
         channels = h.size(1)
 
         if self.learn_top:
+            import pdb
+            pdb.set_trace()
             h = self.learn_top_fn(h)
 
         if self.y_condition:
@@ -237,8 +239,6 @@ class Glow(nn.Module):
         objective += gaussian_likelihood(mean, logs, z)
 
         if self.y_condition:
-            import pdb
-            pdb.set_trace()
             y_logits = self.project_class(z.mean(2).mean(2))
         else:
             y_logits = None
