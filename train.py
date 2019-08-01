@@ -16,7 +16,7 @@ from ignite.handlers import ModelCheckpoint, Timer
 from ignite.metrics import RunningAverage, Loss
 
 from datasets import get_CIFAR10, get_SVHN
-from model_info import Glow
+from model import Glow
 
 import logging
 from tensorboardX import SummaryWriter
