@@ -3,8 +3,8 @@ import math
 import torch
 import torch.nn as nn
 
-from modules_nodropout import (Conv2d, Conv2dZeros, ActNorm2d, InvertibleConv1x1,
-                     Permute2d, LinearZeros, SqueezeLayer,
+from modules import (Conv2d, Conv2dZeros, ActNorm2d, InvertibleConv1x1,
+                     Permute2d, LinearZeros, SqueezeLayer, LinearClass,
                      Split2d, gaussian_likelihood, gaussian_sample)
 from utils import split_feature, uniform_binning_correction
 
@@ -190,8 +190,8 @@ class Glow(nn.Module):
 
         if y_condition:
             C = self.flow.output_shapes[-1][1]
-            self.project_ycond = LinearZeros(y_classes, 2 * C)
-            self.project_class = LinearZeros(C, y_classes)
+            self.project_ycond = LinearClass(y_classes, 2 * C)
+            self.project_class = LinearClass(C, y_classes)
 
         self.register_buffer("prior_h",
                              torch.zeros([1,

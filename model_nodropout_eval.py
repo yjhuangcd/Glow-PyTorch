@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from modules import (Conv2d, Conv2dZeros, ActNorm2d, InvertibleConv1x1,
-                     Permute2d, LinearZeros, LinearZeros_DROP, SqueezeLayer,
+                     Permute2d, LinearZeros, SqueezeLayer,
                      Split2d, gaussian_likelihood, gaussian_sample)
 from utils import split_feature, uniform_binning_correction
 
@@ -191,7 +191,7 @@ class Glow(nn.Module):
         if y_condition:
             C = self.flow.output_shapes[-1][1]
             self.project_ycond = LinearZeros(y_classes, 2 * C)
-            self.project_class = LinearZeros_DROP(C, y_classes)
+            self.project_class = LinearZeros(C, y_classes)
 
         self.register_buffer("prior_h",
                              torch.zeros([1,
@@ -235,10 +235,9 @@ class Glow(nn.Module):
 
         mean, logs = self.prior(x, y_onehot)
         objective += gaussian_likelihood(mean, logs, z)
+        logpz = gaussian_likelihood(mean, logs, z)
 
         if self.y_condition:
-            import pdb
-            pdb.set_trace()
             y_logits = self.project_class(z.mean(2).mean(2))
         else:
             y_logits = None
@@ -246,7 +245,7 @@ class Glow(nn.Module):
         # Full objective - converted to bits per dimension
         bpd = (-objective) / (math.log(2.) * c * h * w)
 
-        return z, bpd, y_logits
+        return z, bpd, y_logits, logpz
 
     def reverse_flow(self, z, y_onehot, temperature):
         with torch.no_grad():

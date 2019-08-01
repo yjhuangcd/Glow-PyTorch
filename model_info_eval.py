@@ -183,21 +183,28 @@ class Glow(nn.Module):
 
         self.learn_top = learn_top
 
-        # learned prior
-        if learn_top:
-            C = self.flow.output_shapes[-1][1]
-            self.learn_top_fn = Conv2dZeros(C * 2, C * 2)
-
         if y_condition:
-            C = self.flow.output_shapes[-1][1]
+            C = self.flow.output_shapes[-1][1] // 2
+            # learned prior
+            if learn_top:
+                self.learn_top_fn = Conv2dZeros(C * 2, C * 2)
             self.project_ycond = LinearZeros(y_classes, 2 * C)
             self.project_class = LinearZeros_DROP(C, y_classes)
 
-        self.register_buffer("prior_h",
-                             torch.zeros([1,
-                                          self.flow.output_shapes[-1][1] * 2,
-                                          self.flow.output_shapes[-1][2],
-                                          self.flow.output_shapes[-1][3]]))
+            self.register_buffer("prior_h",
+                                 torch.zeros([1,
+                                              self.flow.output_shapes[-1][1],
+                                              self.flow.output_shapes[-1][2],
+                                              self.flow.output_shapes[-1][3]]))
+        else:           
+            C = self.flow.output_shapes[-1][1] 
+            if learn_top:
+                self.learn_top_fn = Conv2dZeros(C * 2, C * 2)            
+            self.register_buffer("prior_h",
+                                 torch.zeros([1,
+                                              self.flow.output_shapes[-1][1] * 2,
+                                              self.flow.output_shapes[-1][2],
+                                              self.flow.output_shapes[-1][3]]))
 
     def prior(self, data, y_onehot=None):
         if data is not None:
@@ -231,32 +238,43 @@ class Glow(nn.Module):
 
         x, logdet = uniform_binning_correction(x)
 
-        z, objective = self.flow(x, logdet=logdet, reverse=False)
+        z, objective = self.flow(x, logdet=logdet, reverse=False)  # z_size = C     
 
-        mean, logs = self.prior(x, y_onehot)
-        objective += gaussian_likelihood(mean, logs, z)
+        mean, logs = self.prior(x, y_onehot)  # if condition, mean_size = C//2; else, mean_size = C
 
         if self.y_condition:
-            import pdb
-            pdb.set_trace()
-            y_logits = self.project_class(z.mean(2).mean(2))
+            z_y, z_n = split_feature(z, "split")
+            self.mean_normal = torch.zeros(z_y.shape).cuda()
+            self.logs_normal = torch.ones(z_y.shape).cuda()
+            y_logits = self.project_class(z_y.mean(2).mean(2))
+            objective += gaussian_likelihood(mean, logs, z_y) + gaussian_likelihood(self.mean_normal, self.logs_normal, z_n)
+            logpzy = gaussian_likelihood(mean, logs, z_y)
+            logpzn = gaussian_likelihood(self.mean_normal, self.logs_normal, z_n)
         else:
+            objective += gaussian_likelihood(mean, logs, z)
             y_logits = None
 
         # Full objective - converted to bits per dimension
         bpd = (-objective) / (math.log(2.) * c * h * w)
 
-        return z, bpd, y_logits
+        return z, bpd, y_logits, logpzy, logpzn
 
     def reverse_flow(self, z, y_onehot, temperature):
         with torch.no_grad():
             if z is None:
-                mean, logs = self.prior(z, y_onehot)
-                z = gaussian_sample(mean, logs, temperature)
-            x = self.flow(z, temperature=temperature, reverse=True)
+                if self.y_condition:
+                    mean, logs = self.prior(z, y_onehot)
+                    z_y = gaussian_sample(mean, logs, temperature)
+                    z_n = gaussian_sample(self.mean_normal, self.logs_normal, temperature)
+                    z = torch.cat(z_y, z_n)
+                else:
+                    mean, logs = self.prior(z, y_onehot)
+                    z = gaussian_sample(mean, logs, temperature)
+                x = self.flow(z, temperature=temperature, reverse=True)
         return x
 
     def set_actnorm_init(self):
         for name, m in self.named_modules():
             if isinstance(m, ActNorm2d):
                 m.inited = True
+

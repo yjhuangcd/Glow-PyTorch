@@ -150,16 +150,31 @@ class ActNorm2d(_ActNorm):
             "[ActNorm]: input should be in shape as `BCHW`,"
             " channels should be {} rather than {}".format(
                 self.num_features, input.size()))
+        
+# class ClassZeros_DROP(nn.Module):
+#     def __init__(self, in_channels, out_channels, logscale_factor=3):
+#         super().__init__()
+        
+#         self.dropout = nn.Dropout(0.5)
+#         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=64, kernel_size=(3,3), padding=(1,1), bias=True)
+        
+#         self.linear = nn.Linear(in_channels, out_channels)
+#         self.linear.weight.data.zero_()
+#         self.linear.bias.data.zero_()
+
+#         self.logscale_factor = logscale_factor
+
+#         self.logs = nn.Parameter(torch.zeros(out_channels))
 
 
 class LinearZeros_DROP(nn.Module):
     def __init__(self, in_channels, out_channels, logscale_factor=3):
         super().__init__()
         
-        self.dropout = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(0.5)        
         self.linear = nn.Linear(in_channels, out_channels)
-        self.linear.weight.data.zero_()
-        self.linear.bias.data.zero_()
+#         self.linear.weight.data.zero_()
+#         self.linear.bias.data.zero_()
 
         self.logscale_factor = logscale_factor
 
@@ -177,6 +192,20 @@ class LinearZeros(nn.Module):
         self.linear = nn.Linear(in_channels, out_channels)
         self.linear.weight.data.zero_()
         self.linear.bias.data.zero_()
+        
+        self.logscale_factor = logscale_factor
+
+        self.logs = nn.Parameter(torch.zeros(out_channels))
+
+    def forward(self, input):
+        output = self.linear(input)
+        return output * torch.exp(self.logs * self.logscale_factor)
+    
+class LinearClass(nn.Module):
+    def __init__(self, in_channels, out_channels, logscale_factor=3):
+        super().__init__()
+
+        self.linear = nn.Linear(in_channels, out_channels)
         
         self.logscale_factor = logscale_factor
 
